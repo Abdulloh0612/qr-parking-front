@@ -1,78 +1,105 @@
 import { apiClient } from './client'
 import type {
-  User,
-  RegisterUserData,
-  UpdateUserData,
-  ContactInfo,
-  Message,
-  Review,
-  SendMessageData,
-  CreateReviewData,
-} from '@/types/user'
+  QRPublicData,
+  OwnProfile,
+  SendOtpResponse,
+  VerifyOtpResponse,
+  SendMessageResponse,
+} from '@/types/api'
 import type { ApiResponse } from '@/types/api'
-import { getDeviceId } from '@/lib/utils/deviceId'
 
-// ============= QR Endpoints =============
+// ─── Token helpers ────────────────────────────────────────────────────────────
 
-export async function checkQRStatus(
-  qrId: string
-): Promise<ApiResponse<{ registered: boolean }>> {
-  return apiClient.get(`/qr/${qrId}/status`)
+export function saveToken(token: string) {
+  localStorage.setItem('access_token', token)
 }
 
-export async function registerQR(
-  data: RegisterUserData
-): Promise<ApiResponse<{ id: string; qr_id: string; created_at: string }>> {
-  return apiClient.post('/qr/register', data)
+export function getToken(): string | null {
+  return localStorage.getItem('access_token')
 }
 
-export async function getQRInfo(qrId: string): Promise<ApiResponse<ContactInfo>> {
+export function clearToken() {
+  localStorage.removeItem('access_token')
+}
+
+// ─── QR endpoints ─────────────────────────────────────────────────────────────
+
+export function getQRData(qrId: string): Promise<ApiResponse<QRPublicData>> {
   return apiClient.get(`/qr/${qrId}`)
 }
 
-// Get public profile by user display_id (used for /account?id=UUID scheme)
-export async function getPublicProfile(
-  displayId: string
-): Promise<ApiResponse<ContactInfo>> {
-  return apiClient.get(`/account/public/${displayId}`)
+export function sendOtp(qrId: string, phone: string): Promise<ApiResponse<SendOtpResponse>> {
+  return apiClient.post(`/qr/${qrId}`, { phone })
 }
 
-export async function sendMessage(
+export function verifyOtp(
   qrId: string,
-  data: SendMessageData
-): Promise<ApiResponse<{ message: string }>> {
-  return apiClient.post(`/qr/${qrId}/message`, data)
+  phone: string,
+  otp: string
+): Promise<ApiResponse<VerifyOtpResponse>> {
+  return apiClient.post(`/qr-verify/${qrId}`, { phone, otp })
 }
 
-export async function createReview(
+export function sendMessage(
   qrId: string,
-  data: CreateReviewData
-): Promise<ApiResponse<{ id: string; rating: number; created_at: string }>> {
-  return apiClient.post(`/qr/${qrId}/rating`, data)
+  message: string
+): Promise<ApiResponse<SendMessageResponse>> {
+  return apiClient.post(`/qr-message/${qrId}`, { message })
 }
 
-// ============= Account Endpoints =============
+// ─── Profile endpoints ────────────────────────────────────────────────────────
 
-export async function getAccount(): Promise<ApiResponse<User>> {
-  return apiClient.get('/account')
+export function getMyProfile(): Promise<ApiResponse<OwnProfile>> {
+  return apiClient.get('/me')
 }
 
-export async function getAccountMessages(): Promise<ApiResponse<Message[]>> {
-  return apiClient.get('/account/messages')
+export function updateMyProfile(data: Partial<OwnProfile>): Promise<ApiResponse<OwnProfile>> {
+  return apiClient.patch('/me', data)
 }
 
-export async function getAccountReviews(): Promise<ApiResponse<Review[]>> {
-  return apiClient.get('/account/reviews')
+export function updateVehicle(
+  vehicleId: string,
+  data: { plate_number?: string; car_model?: string; photo_url?: string; telegram_enabled?: boolean }
+): Promise<ApiResponse<unknown>> {
+  return apiClient.patch(`/me/vehicles/${vehicleId}`, data)
 }
 
-export async function updateAccount(
-  data: UpdateUserData
-): Promise<ApiResponse<{ id: string; updated_at: string }>> {
-  return apiClient.patch('/account', data)
-}
-
-// ============= Device ID helper =============
+// ─── Compat helpers ───────────────────────────────────────────────────────────
 
 export function isUserRegistered(): boolean {
-  return !!getDeviceId()
+  return !!localStorage.getItem('access_token')
+}
+
+// ─── Admin endpoints ──────────────────────────────────────────────────────────
+
+export function adminLogin(
+  username: string,
+  password: string
+): Promise<ApiResponse<{ tokens: { access_token: string }; admin_session: boolean }>> {
+  return apiClient.post('/admin/login', { username, password })
+}
+
+export function adminGetUsers(
+  page = 1,
+  limit = 20
+): Promise<ApiResponse<{ users: import('@/types/api').AdminClient[]; total: number }>> {
+  return apiClient.get(`/admin/users?page=${page}&limit=${limit}`, true)
+}
+
+export function adminGenerateQR(
+  count = 10
+): Promise<ApiResponse<{ count: number; data: import('@/types/api').AdminQRCode[] }>> {
+  return apiClient.post('/admin/qrcodes/generate', { count }, true)
+}
+
+export function adminBlockQR(qrId: string): Promise<ApiResponse<unknown>> {
+  return apiClient.patch(`/admin/qrcodes/${qrId}/block`, undefined, true)
+}
+
+export function adminGetMessages(): Promise<ApiResponse<import('@/types/api').AdminMessage[]>> {
+  return apiClient.get('/admin/messages', true)
+}
+
+export function adminBlockUser(userId: string): Promise<ApiResponse<unknown>> {
+  return apiClient.patch(`/admin/users/${userId}/block`, undefined, true)
 }

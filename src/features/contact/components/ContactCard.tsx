@@ -1,9 +1,9 @@
 import { Card } from '@/components/ui/Card'
-import type { ContactInfo } from '@/types/user'
+import type { QROwner } from '@/types/api'
 import { formatPhoneDisplay } from '@/lib/utils/formatters'
 
 interface ContactCardProps {
-  contact: ContactInfo
+  contact: QROwner
 }
 
 export function ContactCard({ contact }: ContactCardProps) {

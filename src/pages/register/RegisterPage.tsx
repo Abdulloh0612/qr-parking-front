@@ -136,7 +136,7 @@ export function RegisterPage() {
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { submitRegistration, loading, error } = useRegistration(qrId || 'DEFAULT')
+  const { submitOtp: submitRegistration, loading, error } = useRegistration(qrId || 'DEFAULT')
 
   const updateField = (field: keyof RegistrationData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -164,7 +164,7 @@ export function RegisterPage() {
   }
 
   const handleSubmit = () => {
-    submitRegistration(formData)
+    void submitRegistration(formData.phone || '')
   }
 
   return (

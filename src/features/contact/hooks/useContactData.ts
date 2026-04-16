@@ -1,29 +1,31 @@
 import { useState, useEffect } from 'react'
-import { getQRInfo, sendMessage } from '@/lib/api/endpoints'
-import type { ContactInfo } from '@/types/user'
+import { getQRData, sendMessage } from '@/lib/api/endpoints'
+import type { QROwner } from '@/types/api'
 
 export function useContactData(qrId: string) {
-  const [contact, setContact] = useState<ContactInfo | null>(null)
+  const [contact, setContact] = useState<QROwner | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string>('')
 
   useEffect(() => {
-    loadContact()
+    void loadContact()
   }, [qrId])
 
   const loadContact = async () => {
     setLoading(true)
     setError('')
-
     try {
-      const response = await getQRInfo(qrId)
-
+      const response = await getQRData(qrId)
       if (response.success && response.data) {
-        setContact(response.data)
+        if (response.data.registered) {
+          setContact(response.data.owner)
+        } else {
+          setError('QR код не зарегистрирован')
+        }
       } else {
         setError(response.error?.message || 'QR код не найден')
       }
-    } catch (err) {
+    } catch {
       setError('Произошла ошибка при загрузке данных')
     } finally {
       setLoading(false)
@@ -31,8 +33,7 @@ export function useContactData(qrId: string) {
   }
 
   const handleSendMessage = async (message: string) => {
-    const response = await sendMessage(qrId, { message })
-
+    const response = await sendMessage(qrId, message)
     if (!response.success) {
       throw new Error(response.error?.message || 'Ошибка отправки сообщения')
     }
