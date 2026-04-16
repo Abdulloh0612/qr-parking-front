@@ -1,14 +1,14 @@
 services:
   app:
     build:
-      dockerfile: docker/Dockerfile
-    container_name: qr-parking-front 
-    command: /bin/sh -c "yarn install && yarn build"
+      context: .
+      dockerfile: Dockerfile
+    container_name: qr-parking-front
+    command: /bin/sh -c "npm run build"
     volumes:
       - .:/app
     networks:
       - qr-parking-network
-
 networks:
   qr-parking-network:
     external: true
