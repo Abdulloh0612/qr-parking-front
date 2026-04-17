@@ -156,6 +156,14 @@ export interface DashboardGrowthPoint {
   count: number
 }
 
+export type DashboardChartSeries = 'clients' | 'qr_created' | 'qr_activated'
+
+export interface DashboardChartData {
+  series: DashboardChartSeries
+  days: number
+  points: DashboardGrowthPoint[]
+}
+
 export interface DashboardStats {
   total_users: number
   total_qr_codes: number
@@ -165,4 +173,22 @@ export interface DashboardStats {
   total_messages: number
   scans_today: number
   user_growth: DashboardGrowthPoint[]
+}
+
+/** Аккаунты входа в админку (таблица admins). */
+export type AdminRole = 'admin' | 'super_admin'
+
+export interface AdminSessionInfo {
+  username: string
+  role: AdminRole
+  display_id: string
+}
+
+export interface AdminAccount {
+  id: number
+  display_id: string
+  username: string
+  role: AdminRole
+  created_at: string
+  updated_at: string
 }

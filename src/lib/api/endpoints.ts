@@ -80,14 +80,52 @@ export function isUserRegistered(): boolean {
 export function adminLogin(
   username: string,
   password: string
-): Promise<ApiResponse<{ tokens: { access_token: string }; admin_session: boolean }>> {
+): Promise<ApiResponse<{ tokens: { access_token: string }; admin_session: boolean; role: import('@/types/api').AdminRole }>> {
   return apiClient.post('/admin/login', { username, password })
+}
+
+export function adminGetMe(): Promise<ApiResponse<import('@/types/api').AdminSessionInfo>> {
+  return apiClient.get('/admin/me', true)
+}
+
+export function adminListAdmins(
+  page = 1,
+  limit = 50
+): Promise<ApiResponse<{ data: import('@/types/api').AdminAccount[]; total: number; page: number; limit: number }>> {
+  return apiClient.get(`/admin/admins?page=${page}&limit=${limit}`, true)
+}
+
+export function adminCreateAdmin(body: {
+  username: string
+  password: string
+  role?: import('@/types/api').AdminRole
+}): Promise<ApiResponse<import('@/types/api').AdminAccount>> {
+  return apiClient.post('/admin/admins', body, true)
+}
+
+export function adminPatchAdmin(
+  displayId: string,
+  body: { password?: string; role?: import('@/types/api').AdminRole }
+): Promise<ApiResponse<import('@/types/api').AdminAccount>> {
+  return apiClient.patch(`/admin/admins/${displayId}`, body, true)
+}
+
+export function adminBlockAdminAccount(displayId: string): Promise<ApiResponse<unknown>> {
+  return apiClient.patch(`/admin/admins/${displayId}/block`, undefined, true)
 }
 
 export function adminGetDashboard(
   days = 30
 ): Promise<ApiResponse<import('@/types/api').DashboardStats>> {
   return apiClient.get(`/admin/dashboard?days=${days}`, true)
+}
+
+export function adminGetDashboardChart(
+  days = 30,
+  series: import('@/types/api').DashboardChartSeries = 'clients'
+): Promise<ApiResponse<import('@/types/api').DashboardChartData>> {
+  const q = new URLSearchParams({ days: String(days), series })
+  return apiClient.get(`/admin/dashboard/chart?${q}`, true)
 }
 
 export function adminGetUsers(
@@ -131,6 +169,13 @@ export function adminGenerateQR(
 
 export function adminBlockQR(qrId: string): Promise<ApiResponse<unknown>> {
   return apiClient.patch(`/admin/qrcodes/${qrId}/block`, undefined, true)
+}
+
+export function adminUpdateVehicle(
+  vehicleId: string,
+  data: { plate_number?: string; car_model?: string; is_public?: boolean }
+): Promise<ApiResponse<unknown>> {
+  return apiClient.patch(`/admin/vehicles/${vehicleId}`, data, true)
 }
 
 export function adminGetMessages(

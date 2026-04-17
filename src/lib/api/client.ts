@@ -47,12 +47,17 @@ class ApiClient {
       const data = await response.json()
 
       if (!response.ok) {
+        const rawErr = data.error
+        const normalized =
+          typeof rawErr === 'string'
+            ? { code: 'API_ERROR' as const, message: rawErr }
+            : rawErr || {
+                code: 'UNKNOWN_ERROR' as const,
+                message: data.message || 'Произошла ошибка',
+              }
         return {
           success: false,
-          error: data.error || {
-            code: 'UNKNOWN_ERROR',
-            message: data.message || 'Произошла ошибка',
-          },
+          error: normalized,
         }
       }
 

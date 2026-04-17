@@ -14,9 +14,19 @@ import {
   adminGenerateQR,
   adminBlockQR,
   adminGetMessages,
+  adminGetDashboardChart,
+  adminUpdateVehicle,
+  adminGetMe,
+  adminListAdmins,
+  adminCreateAdmin,
+  adminPatchAdmin,
+  adminBlockAdminAccount,
 } from '@/lib/api/endpoints'
 import type {
   DashboardStats,
+  DashboardChartSeries,
+  AdminRole,
+  AdminAccount,
   AdminClient,
   AdminMessage,
   AdminQRCode,
@@ -102,11 +112,13 @@ function BarChart({ data }: { data: { date: string; count: number }[] }) {
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, color = 'blue', icon }: {
+function StatCard({ label, value, color = 'blue', icon, onClick, title }: {
   label: string
   value: number | string
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'purple' | 'gray'
   icon: string
+  onClick?: () => void
+  title?: string
 }) {
   const colors = {
     blue: 'bg-blue-50 text-blue-600',
@@ -116,15 +128,34 @@ function StatCard({ label, value, color = 'blue', icon }: {
     purple: 'bg-purple-50 text-purple-600',
     gray: 'bg-gray-50 text-gray-600',
   }
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-4">
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${colors[color]}`}>
+  const interactive =
+    onClick !== undefined
+      ? 'cursor-pointer hover:border-blue-200 hover:bg-blue-50/40 hover:shadow-sm transition-all active:scale-[0.99]'
+      : ''
+  const shellClass = `bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-4 text-left w-full ${interactive}`
+
+  const body = (
+    <>
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 ${colors[color]}`}>
         {icon}
       </div>
-      <div>
+      <div className="min-w-0">
         <p className="text-2xl font-bold text-gray-900">{value}</p>
         <p className="text-xs text-gray-500">{label}</p>
       </div>
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button type="button" className={shellClass} onClick={onClick} title={title}>
+        {body}
+      </button>
+    )
+  }
+  return (
+    <div className={shellClass} title={title}>
+      {body}
     </div>
   )
 }
@@ -181,14 +212,18 @@ function UserDetailModal({ isOpen, onClose, userId, onUpdated }: {
   const [editing, setEditing] = useState(false)
   const [editData, setEditData] = useState({ first_name: '', last_name: '', phone: '' })
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'info' | 'messages' | 'qrcodes'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'vehicles' | 'messages' | 'qrcodes'>('info')
   const [qrPreview, setQrPreview] = useState<string | null>(null)
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null)
+  const [vehicleEditData, setVehicleEditData] = useState({ plate_number: '', car_model: '', is_public: true })
+  const [savingVehicle, setSavingVehicle] = useState(false)
 
   useEffect(() => {
     if (!isOpen || !userId) return
     setLoading(true)
     setDetail(null)
     setEditing(false)
+    setEditingVehicleId(null)
     setActiveTab('info')
     adminGetUserDetail(userId).then((res) => {
       setLoading(false)
@@ -215,15 +250,37 @@ function UserDetailModal({ isOpen, onClose, userId, onUpdated }: {
     }
   }
 
+  function startEditVehicle(v: AdminUserDetail['vehicles'][number]) {
+    setEditingVehicleId(v.display_id)
+    setVehicleEditData({ plate_number: v.plate_number, car_model: v.car_model, is_public: v.is_public })
+  }
+
+  async function handleSaveVehicle() {
+    if (!editingVehicleId || !userId) return
+    setSavingVehicle(true)
+    const res = await adminUpdateVehicle(editingVehicleId, vehicleEditData)
+    setSavingVehicle(false)
+    if (res.success && detail) {
+      setDetail({
+        ...detail,
+        vehicles: detail.vehicles.map((v) =>
+          v.display_id === editingVehicleId ? { ...v, ...vehicleEditData } : v
+        ),
+      })
+      setEditingVehicleId(null)
+    }
+  }
+
   const tabs = [
-    { key: 'info', label: 'Профиль' },
-    { key: 'messages', label: `Сообщения (${detail?.messages.length ?? 0})` },
-    { key: 'qrcodes', label: `QR коды (${detail?.qr_codes.length ?? 0})` },
-  ] as const
+    { key: 'info' as const, label: 'Профиль' },
+    { key: 'vehicles' as const, label: `Машины (${detail?.vehicles.length ?? 0})` },
+    { key: 'messages' as const, label: `Сообщения (${detail?.messages.length ?? 0})` },
+    { key: 'qrcodes' as const, label: `QR (${detail?.qr_codes.length ?? 0})` },
+  ]
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title="">
+      <Modal isOpen={isOpen} onClose={onClose} title={detail ? `${detail.first_name} ${detail.last_name}` : 'Клиент'}>
         {loading && (
           <div className="py-12 flex items-center justify-center text-gray-400">Загрузка...</div>
         )}
@@ -306,34 +363,88 @@ function UserDetailModal({ isOpen, onClose, userId, onUpdated }: {
 
             {/* Tab: Info */}
             {activeTab === 'info' && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-gray-50 rounded-xl p-3">
-                    <p className="text-xs text-gray-400 mb-0.5">Машин</p>
-                    <p className="font-semibold text-gray-900">{detail.vehicle_count}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-3">
-                    <p className="text-xs text-gray-400 mb-0.5">Сообщений</p>
-                    <p className="font-semibold text-gray-900">{detail.messages.length}</p>
-                  </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-0.5">Машин</p>
+                  <p className="font-semibold text-gray-900">{detail.vehicle_count}</p>
                 </div>
-                {detail.vehicles.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Машины</p>
-                    <div className="space-y-2">
-                      {detail.vehicles.map((v) => (
-                        <div key={v.display_id} className="bg-gray-50 rounded-xl p-3 flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{v.plate_number}</p>
-                            <p className="text-xs text-gray-500">{v.car_model}</p>
-                          </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-0.5">Сообщений</p>
+                  <p className="font-semibold text-gray-900">{detail.messages.length}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-0.5">QR кодов</p>
+                  <p className="font-semibold text-gray-900">{detail.qr_codes.length}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-0.5">Статус</p>
+                  <p className="font-semibold text-gray-900">{detail.is_admin ? 'Админ' : 'Клиент'}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Vehicles */}
+            {activeTab === 'vehicles' && (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {detail.vehicles.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-6">Машин нет</p>
+                ) : (
+                  detail.vehicles.map((v) =>
+                    editingVehicleId === v.display_id ? (
+                      <div key={v.display_id} className="bg-blue-50 rounded-xl p-3 space-y-2 border border-blue-100">
+                        <input
+                          value={vehicleEditData.plate_number}
+                          onChange={(e) => setVehicleEditData({ ...vehicleEditData, plate_number: e.target.value })}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Номер машины"
+                        />
+                        <input
+                          value={vehicleEditData.car_model}
+                          onChange={(e) => setVehicleEditData({ ...vehicleEditData, car_model: e.target.value })}
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Модель"
+                        />
+                        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={vehicleEditData.is_public}
+                            onChange={(e) => setVehicleEditData({ ...vehicleEditData, is_public: e.target.checked })}
+                            className="rounded"
+                          />
+                          Публичный профиль
+                        </label>
+                        <div className="flex gap-2">
+                          <Button onClick={handleSaveVehicle} loading={savingVehicle} className="flex-1 text-xs py-1">
+                            Сохранить
+                          </Button>
+                          <button
+                            onClick={() => setEditingVehicleId(null)}
+                            className="flex-1 text-xs py-1 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={v.display_id} className="bg-gray-50 rounded-xl p-3 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{v.plate_number}</p>
+                          <p className="text-xs text-gray-500">{v.car_model}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${v.is_public ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
                             {v.is_public ? 'Публичный' : 'Скрытый'}
                           </span>
+                          <button
+                            onClick={() => startEditVehicle(v)}
+                            className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                          >
+                            ✏️
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    )
+                  )
                 )}
               </div>
             )}
@@ -378,7 +489,7 @@ function UserDetailModal({ isOpen, onClose, userId, onUpdated }: {
                           q.status === 'blocked' ? 'bg-red-100 text-red-700' :
                           'bg-yellow-100 text-yellow-700'
                         }`}>
-                          {q.status === 'active' ? 'Активный' : q.status === 'blocked' ? 'Заблокирован' : 'Не зарегистрирован'}
+                          {q.status === 'active' ? 'Активный' : q.status === 'blocked' ? 'Заблокирован' : 'Не зарег.'}
                         </span>
                         <button
                           onClick={() => setQrPreview(q.code)}
@@ -406,7 +517,7 @@ function UserDetailModal({ isOpen, onClose, userId, onUpdated }: {
 
 // ─── Main AdminPage ───────────────────────────────────────────────────────────
 
-type AdminTab = 'dashboard' | 'users' | 'messages' | 'qrcodes'
+type AdminTab = 'dashboard' | 'users' | 'messages' | 'qrcodes' | 'admins'
 
 export function AdminPage() {
   useAdminAuth()
@@ -414,6 +525,8 @@ export function AdminPage() {
 
   const [tab, setTab] = useState<AdminTab>('dashboard')
   const [dashboard, setDashboard] = useState<DashboardStats | null>(null)
+  const [chartSeries, setChartSeries] = useState<DashboardChartSeries>('clients')
+  const [chartPoints, setChartPoints] = useState<{ date: string; count: number }[]>([])
   const [users, setUsers] = useState<AdminClient[]>([])
   const [usersTotal, setUsersTotal] = useState(0)
   const [messages, setMessages] = useState<AdminMessage[]>([])
@@ -431,10 +544,31 @@ export function AdminPage() {
   const [generatedCodes, setGeneratedCodes] = useState<AdminQRCode[]>([])
   const [searchUser, setSearchUser] = useState('')
 
+  const [sessionRole, setSessionRole] = useState<AdminRole | null>(null)
+  const [admins, setAdmins] = useState<AdminAccount[]>([])
+  const [adminsTotal, setAdminsTotal] = useState(0)
+  const [createAdminOpen, setCreateAdminOpen] = useState(false)
+  const [editAdmin, setEditAdmin] = useState<AdminAccount | null>(null)
+  const [newAdminUser, setNewAdminUser] = useState('')
+  const [newAdminPass, setNewAdminPass] = useState('')
+  const [newAdminRole, setNewAdminRole] = useState<AdminRole>('admin')
+  const [editAdminPass, setEditAdminPass] = useState('')
+  const [editAdminRole, setEditAdminRole] = useState<AdminRole>('admin')
+  const [adminFormError, setAdminFormError] = useState('')
+  const [adminSaving, setAdminSaving] = useState(false)
 
   const loadDashboard = useCallback(async () => {
     const res = await adminGetDashboard(30)
     if (res.success && res.data) setDashboard(res.data)
+  }, [])
+
+  const loadChart = useCallback(async (series: DashboardChartSeries) => {
+    const res = await adminGetDashboardChart(30, series)
+    if (res.success && res.data?.points) {
+      setChartPoints(res.data.points)
+    } else {
+      setChartPoints([])
+    }
   }, [])
 
   const loadUsers = useCallback(async () => {
@@ -460,16 +594,56 @@ export function AdminPage() {
     }
   }, [qrFilter])
 
+  const loadSession = useCallback(async () => {
+    const res = await adminGetMe()
+    if (res.success && res.data?.role) {
+      setSessionRole(res.data.role)
+    } else {
+      setSessionRole(null)
+    }
+  }, [])
+
+  const loadAdmins = useCallback(async () => {
+    const res = await adminListAdmins(1, 100)
+    if (res.success && res.data) {
+      setAdmins(res.data.data || [])
+      setAdminsTotal(res.data.total || 0)
+    }
+  }, [])
+
   useEffect(() => {
     setLoading(true)
-    Promise.all([loadDashboard(), loadUsers(), loadMessages(), loadQRCodes(qrFilter)]).finally(() => {
+    Promise.all([
+      loadDashboard(),
+      loadUsers(),
+      loadMessages(),
+      loadQRCodes(qrFilter),
+      loadSession(),
+    ]).finally(() => {
       setLoading(false)
     })
   }, [])
 
   useEffect(() => {
+    if (tab !== 'dashboard') return
+    void loadChart(chartSeries)
+  }, [tab, chartSeries, loadChart])
+
+  useEffect(() => {
     void loadQRCodes(qrFilter)
   }, [qrFilter])
+
+  useEffect(() => {
+    if (tab === 'admins' && sessionRole === 'super_admin') {
+      void loadAdmins()
+    }
+  }, [tab, sessionRole, loadAdmins])
+
+  useEffect(() => {
+    if (tab === 'admins' && sessionRole !== 'super_admin') {
+      setTab('dashboard')
+    }
+  }, [tab, sessionRole])
 
   async function handleGenerateQR() {
     const count = Math.max(1, Math.min(1000, parseInt(qrCount) || 10))
@@ -481,6 +655,7 @@ export function AdminPage() {
       setGeneratedCodes(newCodes)
       void loadQRCodes(qrFilter)
       void loadDashboard()
+      void loadChart(chartSeries)
     }
   }
 
@@ -488,17 +663,82 @@ export function AdminPage() {
     await adminBlockUser(userId)
     void loadUsers()
     void loadDashboard()
+    void loadChart(chartSeries)
   }
 
   async function handleBlockQR(qrCode: string) {
     await adminBlockQR(qrCode)
     void loadQRCodes(qrFilter)
     void loadDashboard()
+    void loadChart(chartSeries)
   }
 
   function logout() {
     localStorage.removeItem('admin_token')
     navigate('/admin/login', { replace: true })
+  }
+
+  function roleLabel(r: AdminRole) {
+    return r === 'super_admin' ? 'Супер-админ' : 'Админ'
+  }
+
+  async function submitCreateAdmin() {
+    setAdminFormError('')
+    if (!newAdminUser.trim() || newAdminPass.length < 8) {
+      setAdminFormError('Логин и пароль от 8 символов')
+      return
+    }
+    setAdminSaving(true)
+    const res = await adminCreateAdmin({
+      username: newAdminUser.trim(),
+      password: newAdminPass,
+      role: newAdminRole,
+    })
+    setAdminSaving(false)
+    if (!res.success) {
+      setAdminFormError(res.error?.message || 'Не удалось создать')
+      return
+    }
+    setCreateAdminOpen(false)
+    setNewAdminUser('')
+    setNewAdminPass('')
+    setNewAdminRole('admin')
+    void loadAdmins()
+  }
+
+  async function submitEditAdmin() {
+    if (!editAdmin) return
+    setAdminFormError('')
+    setAdminSaving(true)
+    const body: { password?: string; role?: AdminRole } = { role: editAdminRole }
+    if (editAdminPass.trim().length > 0) {
+      if (editAdminPass.length < 8) {
+        setAdminFormError('Пароль не менее 8 символов')
+        setAdminSaving(false)
+        return
+      }
+      body.password = editAdminPass
+    }
+    const res = await adminPatchAdmin(editAdmin.display_id, body)
+    setAdminSaving(false)
+    if (!res.success) {
+      setAdminFormError(res.error?.message || 'Не удалось сохранить')
+      return
+    }
+    setEditAdmin(null)
+    setEditAdminPass('')
+    void loadAdmins()
+  }
+
+  async function handleRemoveAdmin(a: AdminAccount) {
+    const ok = window.confirm(`Удалить учётную запись «${a.username}»?`)
+    if (!ok) return
+    const res = await adminBlockAdminAccount(a.display_id)
+    if (!res.success) {
+      window.alert(res.error?.message || 'Ошибка')
+      return
+    }
+    void loadAdmins()
   }
 
   const filteredUsers = useMemo(() => {
@@ -512,6 +752,19 @@ export function AdminPage() {
     )
   }, [users, searchUser])
 
+  const tabs: { key: AdminTab; label: string }[] = useMemo(() => {
+    const base: { key: AdminTab; label: string }[] = [
+      { key: 'dashboard', label: '📊 Дашборд' },
+      { key: 'users', label: `👥 Клиенты (${usersTotal})` },
+      { key: 'messages', label: `💬 Сообщения (${messages.length})` },
+      { key: 'qrcodes', label: `🔳 QR коды` },
+    ]
+    if (sessionRole === 'super_admin') {
+      base.push({ key: 'admins', label: `🛡 Админы (${adminsTotal})` })
+    }
+    return base
+  }, [sessionRole, usersTotal, messages.length, adminsTotal])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -523,13 +776,6 @@ export function AdminPage() {
     )
   }
 
-  const tabs: { key: AdminTab; label: string }[] = [
-    { key: 'dashboard', label: '📊 Дашборд' },
-    { key: 'users', label: `👥 Клиенты (${usersTotal})` },
-    { key: 'messages', label: `💬 Сообщения (${messages.length})` },
-    { key: 'qrcodes', label: `🔳 QR коды` },
-  ]
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -539,7 +785,14 @@ export function AdminPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
               <span className="text-white text-sm font-bold">Q</span>
             </div>
-            <h1 className="font-bold text-gray-900 text-sm">QR Parking Admin</h1>
+            <div>
+              <h1 className="font-bold text-gray-900 text-sm">QR Parking Admin</h1>
+              {sessionRole && (
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Ваша роль: <span className="text-gray-600">{roleLabel(sessionRole)}</span>
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={logout}
@@ -572,32 +825,124 @@ export function AdminPage() {
           <div className="space-y-6">
             {/* Stat cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatCard label="Клиентов" value={dashboard.total_users} icon="👥" color="blue" />
-              <StatCard label="QR кодов" value={dashboard.total_qr_codes} icon="🔳" color="purple" />
-              <StatCard label="Сообщений" value={dashboard.total_messages} icon="💬" color="green" />
-              <StatCard label="Сканов сегодня" value={dashboard.scans_today} icon="📡" color="yellow" />
+              <StatCard
+                label="Клиентов"
+                value={dashboard.total_users}
+                icon="👥"
+                color="blue"
+                onClick={() => setTab('users')}
+                title="Открыть список клиентов"
+              />
+              <StatCard
+                label="QR кодов"
+                value={dashboard.total_qr_codes}
+                icon="🔳"
+                color="purple"
+                onClick={() => {
+                  setQrFilter('')
+                  setTab('qrcodes')
+                }}
+                title="Все QR коды"
+              />
+              <StatCard
+                label="Сообщений"
+                value={dashboard.total_messages}
+                icon="💬"
+                color="green"
+                onClick={() => setTab('messages')}
+                title="Сообщения к владельцам"
+              />
+              <StatCard
+                label="Сканов сегодня"
+                value={dashboard.scans_today}
+                icon="📡"
+                color="yellow"
+                onClick={() => {
+                  setQrFilter('active')
+                  setTab('qrcodes')
+                }}
+                title="Сканирования идут по активным наклейкам — показаны активные QR"
+              />
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <StatCard label="Активных QR" value={dashboard.active_qr} icon="✅" color="green" />
-              <StatCard label="Незарегистр." value={dashboard.unregistered_qr} icon="⏳" color="yellow" />
-              <StatCard label="Заблокировано" value={dashboard.blocked_qr} icon="🚫" color="red" />
+              <StatCard
+                label="Активных QR"
+                value={dashboard.active_qr}
+                icon="✅"
+                color="green"
+                onClick={() => {
+                  setQrFilter('active')
+                  setTab('qrcodes')
+                }}
+                title="Фильтр: активные"
+              />
+              <StatCard
+                label="Незарегистр."
+                value={dashboard.unregistered_qr}
+                icon="⏳"
+                color="yellow"
+                onClick={() => {
+                  setQrFilter('unregistered')
+                  setTab('qrcodes')
+                }}
+                title="Фильтр: не зарегистрированы"
+              />
+              <StatCard
+                label="Заблокировано"
+                value={dashboard.blocked_qr}
+                icon="🚫"
+                color="red"
+                onClick={() => {
+                  setQrFilter('blocked')
+                  setTab('qrcodes')
+                }}
+                title="Фильтр: заблокированы"
+              />
             </div>
 
             {/* Growth chart */}
             <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                 <div>
-                  <h3 className="font-semibold text-gray-900">Рост клиентов</h3>
-                  <p className="text-xs text-gray-400">За последние 30 дней</p>
+                  <h3 className="font-semibold text-gray-900">
+                    {chartSeries === 'clients' && 'Новые клиенты'}
+                    {chartSeries === 'qr_created' && 'Созданные QR'}
+                    {chartSeries === 'qr_activated' && 'Активации QR'}
+                  </h3>
+                  <p className="text-xs text-gray-400">По дням · последние 30 дней</p>
                 </div>
-                <span className="text-2xl font-bold text-blue-600">+{dashboard.user_growth.reduce((a, b) => a + b.count, 0)}</span>
+                <span className="text-2xl font-bold text-blue-600 sm:text-right">
+                  +{chartPoints.reduce((a, b) => a + b.count, 0)}
+                </span>
               </div>
-              <BarChart data={dashboard.user_growth} />
-              {dashboard.user_growth.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {(
+                  [
+                    { key: 'clients' as const, label: 'Клиенты' },
+                    { key: 'qr_created' as const, label: 'QR созданы' },
+                    { key: 'qr_activated' as const, label: 'QR актив.' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setChartSeries(opt.key)}
+                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                      chartSeries === opt.key
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <BarChart data={chartPoints} />
+              {chartPoints.length > 0 && (
                 <div className="flex justify-between mt-2 text-xs text-gray-400">
-                  <span>{dashboard.user_growth[0]?.date?.slice(5)}</span>
-                  <span>{dashboard.user_growth[dashboard.user_growth.length - 1]?.date?.slice(5)}</span>
+                  <span>{chartPoints[0]?.date?.slice(5)}</span>
+                  <span>{chartPoints[chartPoints.length - 1]?.date?.slice(5)}</span>
                 </div>
               )}
             </div>
@@ -806,7 +1151,177 @@ export function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* ── Admins (super_admin only) ── */}
+        {tab === 'admins' && sessionRole === 'super_admin' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+              <p className="text-sm text-gray-500 max-w-xl">
+                Учётные записи для входа в эту панель. Просмотр и изменение списка доступны только роли «Супер-админ».
+              </p>
+              <Button
+                onClick={() => {
+                  setCreateAdminOpen(true)
+                  setAdminFormError('')
+                  setNewAdminUser('')
+                  setNewAdminPass('')
+                  setNewAdminRole('admin')
+                }}
+              >
+                Новый админ
+              </Button>
+            </div>
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+              {admins.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-sm">Нет записей</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {admins.map((a) => (
+                    <div
+                      key={a.display_id}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    >
+                      <div>
+                        <p className="font-medium text-gray-900">{a.username}</p>
+                        <p className="text-xs text-gray-400">{formatDate(a.created_at)}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            a.role === 'super_admin'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {roleLabel(a.role)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditAdmin(a)
+                            setEditAdminRole(a.role)
+                            setEditAdminPass('')
+                            setAdminFormError('')
+                          }}
+                          className="text-xs px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                        >
+                          Изменить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveAdmin(a)}
+                          className="text-xs px-2.5 py-1 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      <Modal
+        isOpen={createAdminOpen}
+        onClose={() => {
+          if (!adminSaving) setCreateAdminOpen(false)
+        }}
+        title="Новый администратор"
+      >
+        <div className="space-y-3">
+          {adminFormError && <p className="text-sm text-red-500">{adminFormError}</p>}
+          <div>
+            <label className="text-xs text-gray-500 block">Логин</label>
+            <input
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={newAdminUser}
+              onChange={(e) => setNewAdminUser(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block">Пароль (от 8 символов)</label>
+            <input
+              type="password"
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={newAdminPass}
+              onChange={(e) => setNewAdminPass(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block">Роль</label>
+            <select
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={newAdminRole}
+              onChange={(e) => setNewAdminRole(e.target.value as AdminRole)}
+            >
+              <option value="admin">Админ</option>
+              <option value="super_admin">Супер-админ</option>
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button onClick={() => void submitCreateAdmin()} loading={adminSaving}>
+              Создать
+            </Button>
+            <button
+              type="button"
+              className="text-sm text-gray-500 px-2 py-2"
+              onClick={() => setCreateAdminOpen(false)}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!editAdmin}
+        onClose={() => {
+          if (!adminSaving) setEditAdmin(null)
+        }}
+        title={editAdmin ? `Изменить: ${editAdmin.username}` : ''}
+      >
+        <div className="space-y-3">
+          {adminFormError && <p className="text-sm text-red-500">{adminFormError}</p>}
+          <div>
+            <label className="text-xs text-gray-500 block">Новый пароль (оставьте пустым, чтобы не менять)</label>
+            <input
+              type="password"
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={editAdminPass}
+              onChange={(e) => setEditAdminPass(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block">Роль</label>
+            <select
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={editAdminRole}
+              onChange={(e) => setEditAdminRole(e.target.value as AdminRole)}
+            >
+              <option value="admin">Админ</option>
+              <option value="super_admin">Супер-админ</option>
+            </select>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button onClick={() => void submitEditAdmin()} loading={adminSaving}>
+              Сохранить
+            </Button>
+            <button
+              type="button"
+              className="text-sm text-gray-500 px-2 py-2"
+              onClick={() => setEditAdmin(null)}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* User detail modal */}
       <UserDetailModal
