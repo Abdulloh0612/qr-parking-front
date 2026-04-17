@@ -27,6 +27,7 @@ export function AdminLoginPage() {
       return
     }
     localStorage.setItem('admin_token', res.data.tokens.access_token)
+    localStorage.setItem('admin_role', res.data.role)
     navigate('/admin', { replace: true })
   }
 

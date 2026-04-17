@@ -544,7 +544,10 @@ export function AdminPage() {
   const [generatedCodes, setGeneratedCodes] = useState<AdminQRCode[]>([])
   const [searchUser, setSearchUser] = useState('')
 
-  const [sessionRole, setSessionRole] = useState<AdminRole | null>(null)
+  const [sessionRole, setSessionRole] = useState<AdminRole | null>(() => {
+    const raw = localStorage.getItem('admin_role')
+    return raw === 'super_admin' || raw === 'admin' ? raw : null
+  })
   const [admins, setAdmins] = useState<AdminAccount[]>([])
   const [adminsTotal, setAdminsTotal] = useState(0)
   const [createAdminOpen, setCreateAdminOpen] = useState(false)
@@ -598,8 +601,12 @@ export function AdminPage() {
     const res = await adminGetMe()
     if (res.success && res.data?.role) {
       setSessionRole(res.data.role)
+      localStorage.setItem('admin_role', res.data.role)
     } else {
-      setSessionRole(null)
+      // Fallback: если /admin/me недоступен/упал, всё равно показываем базовую роль
+      // (нужно, чтобы в UI не было «пусто» для обычного admin).
+      const raw = localStorage.getItem('admin_role')
+      setSessionRole(raw === 'super_admin' || raw === 'admin' ? raw : 'admin')
     }
   }, [])
 
@@ -675,6 +682,7 @@ export function AdminPage() {
 
   function logout() {
     localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_role')
     navigate('/admin/login', { replace: true })
   }
 
