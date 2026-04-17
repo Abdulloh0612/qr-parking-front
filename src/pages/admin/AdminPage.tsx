@@ -63,12 +63,27 @@ function downloadSvgAsImage(svgEl: SVGElement, filename: string) {
 // ─── Mini bar chart ───────────────────────────────────────────────────────────
 
 function BarChart({ data }: { data: { date: string; count: number }[] }) {
-  if (!data.length) return <div className="h-32 flex items-center justify-center text-gray-400 text-sm">Нет данных</div>
-  const max = Math.max(...data.map((d) => d.count), 1)
+  const safe = (data || [])
+    .map((d) => ({
+      date: String(d?.date ?? ''),
+      count: Number((d as { count?: unknown })?.count ?? 0) || 0,
+    }))
+    .filter((d) => d.date.length > 0)
+
+  if (!safe.length) {
+    return (
+      <div className="h-32 flex items-center justify-center text-gray-400 text-sm">
+        Нет данных
+      </div>
+    )
+  }
+
+  const max = Math.max(...safe.map((d) => d.count), 1)
   return (
     <div className="flex items-end gap-1 h-32 w-full">
-      {data.map((d) => {
-        const pct = Math.max((d.count / max) * 100, 4)
+      {safe.map((d) => {
+        const pctRaw = (d.count / max) * 100
+        const pct = Number.isFinite(pctRaw) ? Math.max(pctRaw, 4) : 4
         return (
           <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
             <div
