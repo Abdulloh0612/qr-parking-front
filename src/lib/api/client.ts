@@ -1,12 +1,20 @@
 import type { ApiResponse } from '@/types/api'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+/** VITE_API_URL: full backend origin (https://api.example.com) or empty / "/" for same-origin /api/v1. */
+function apiBasePath(): string {
+  const raw = String(import.meta.env.VITE_API_URL ?? '').trim()
+  // "/" + "/api/v1" would become "//api/v1" → browser treats host as "api". Avoid that.
+  if (raw === '' || raw === '/') {
+    return '/api/v1'
+  }
+  return `${raw.replace(/\/$/, '')}/api/v1`
+}
 
 class ApiClient {
   private baseUrl: string
 
   constructor() {
-    this.baseUrl = `${API_URL}/api/v1`
+    this.baseUrl = apiBasePath()
   }
 
   private async request<T>(
