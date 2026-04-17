@@ -2,6 +2,7 @@ import type { ApiResponse } from '@/types/api'
 
 /** VITE_API_URL: full backend origin (https://api.example.com) or empty / "/" for same-origin /api/v1. */
 function apiBasePath(): string {
+  console.log(import.meta.env.VITE_API_URL)
   const raw = String(import.meta.env.VITE_API_URL ?? '').trim()
   // "/" + "/api/v1" would become "//api/v1" → browser treats host as "api". Avoid that.
   if (raw === '' || raw === '/') {
@@ -87,6 +88,31 @@ class ApiClient {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
     }, useAdminToken)
+  }
+
+  async uploadFile<T>(endpoint: string, file: File): Promise<ApiResponse<T>> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const headers: Record<string, string> = {}
+    const token = localStorage.getItem('access_token')
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        return { success: false, error: data.error || { code: 'UPLOAD_ERROR', message: data.message || 'Ошибка загрузки' } }
+      }
+      if ('success' in data) return data as ApiResponse<T>
+      return { success: true, data: data as T }
+    } catch {
+      return { success: false, error: { code: 'NETWORK_ERROR', message: 'Ошибка соединения' } }
+    }
   }
 }
 

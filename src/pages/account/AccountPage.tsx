@@ -11,6 +11,7 @@ import {
   sendOtp,
   verifyOtp,
   sendMessage,
+  uploadMedia,
   getMyProfile,
   updateMyProfile,
   updateVehicle,
@@ -55,6 +56,8 @@ export function AccountPage() {
   const [msgSent, setMsgSent] = useState(false)
   const [msgError, setMsgError] = useState('')
   const [msgSending, setMsgSending] = useState(false)
+  const [msgMediaFile, setMsgMediaFile] = useState<File | null>(null)
+  const [msgMediaPreview, setMsgMediaPreview] = useState<string | null>(null)
 
   useEffect(() => {
     if (!qrCode) {
@@ -153,7 +156,19 @@ export function AccountPage() {
     if (!qrCode || !msgText.trim()) return
     setMsgSending(true)
     setMsgError('')
-    const res = await sendMessage(qrCode, msgText.trim())
+
+    let mediaUrl: string | null = null
+    if (msgMediaFile) {
+      const uploadRes = await uploadMedia(msgMediaFile)
+      if (!uploadRes.success) {
+        setMsgError('Ошибка загрузки файла')
+        setMsgSending(false)
+        return
+      }
+      mediaUrl = uploadRes.data?.url ?? null
+    }
+
+    const res = await sendMessage(qrCode, msgText.trim(), mediaUrl)
     setMsgSending(false)
     if (!res.success) {
       setMsgError(res.error?.message || 'Ошибка отправки')
@@ -161,6 +176,8 @@ export function AccountPage() {
     }
     setMsgSent(true)
     setMsgText('')
+    setMsgMediaFile(null)
+    setMsgMediaPreview(null)
   }
 
   if (state === 'loading') {
@@ -254,6 +271,13 @@ export function AccountPage() {
         msgSent={msgSent}
         msgError={msgError}
         msgSending={msgSending}
+        msgMediaFile={msgMediaFile}
+        msgMediaPreview={msgMediaPreview}
+        onMediaChange={(file) => {
+          setMsgMediaFile(file)
+          if (file) setMsgMediaPreview(URL.createObjectURL(file))
+          else setMsgMediaPreview(null)
+        }}
         onSendMessage={handleSendMessage}
         onClaimQR={() => setState('register_phone')}
       />
@@ -487,6 +511,9 @@ function PublicView({
   msgSent,
   msgError,
   msgSending,
+  msgMediaFile,
+  msgMediaPreview,
+  onMediaChange,
   onSendMessage,
   onClaimQR,
 }: {
@@ -496,10 +523,14 @@ function PublicView({
   msgSent: boolean
   msgError: string
   msgSending: boolean
+  msgMediaFile: File | null
+  msgMediaPreview: string | null
+  onMediaChange: (file: File | null) => void
   onSendMessage: () => void
   onClaimQR: () => void
 }) {
   const initials = `${owner.first_name?.[0] || ''}${owner.last_name?.[0] || ''}`
+  const canMessage = owner.telegram_enabled && owner.telegram_bot_linked
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 pb-8">
@@ -534,11 +565,16 @@ function PublicView({
 
           {(owner.vehicle_number || owner.vehicle_brand) && (
             <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-              </div>
+              {owner.vehicle_photo_url ? (
+                <img src={owner.vehicle_photo_url} alt="vehicle" className="w-12 h-10 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-12 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h10l2-2zM14 8l2 4h3l-2-4h-3z" />
+                  </svg>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-gray-400">Автомобиль</p>
                 <p className="font-semibold text-sm">
@@ -582,7 +618,7 @@ function PublicView({
                 value={owner.telegram}
                 href={`https://t.me/${owner.telegram.replace(/^@/, '')}`}
               >
-                {owner.telegram_enabled && (
+                {owner.telegram_bot_linked && (
                   <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                     Бот активен
                   </span>
@@ -611,7 +647,16 @@ function PublicView({
         {/* Message form */}
         <Card className="mb-4">
           <h3 className="font-semibold text-gray-800 mb-3">Написать сообщение</h3>
-          {msgSent ? (
+          {!canMessage ? (
+            <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl">
+              <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <p className="text-sm text-amber-700">
+                Владелец не подключил Telegram-бот для получения сообщений. Напишите напрямую через контакты выше.
+              </p>
+            </div>
+          ) : msgSent ? (
             <div className="text-center py-4">
               <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
                 <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -631,6 +676,44 @@ function PublicView({
                 onChange={(e) => setMsgText(e.target.value)}
                 maxLength={500}
               />
+
+              {/* Media preview */}
+              {msgMediaPreview && (
+                <div className="relative inline-block">
+                  {msgMediaFile?.type.startsWith('video/') ? (
+                    <video src={msgMediaPreview} className="max-h-32 rounded-xl object-cover" controls />
+                  ) : (
+                    <img src={msgMediaPreview} alt="preview" className="max-h-32 rounded-xl object-cover" />
+                  )}
+                  <button
+                    onClick={() => onMediaChange(null)}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Attach media button */}
+              <label className="flex items-center gap-2 text-sm text-blue-600 cursor-pointer w-fit">
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null
+                    onMediaChange(file)
+                    e.target.value = ''
+                  }}
+                />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+                {msgMediaFile ? msgMediaFile.name : 'Прикрепить фото / видео'}
+              </label>
+
               {msgError && <p className="text-sm text-red-600">{msgError}</p>}
               <Button
                 onClick={onSendMessage}
@@ -687,13 +770,25 @@ function OwnerView({
         <Card className="mb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="avatar" className="w-16 h-16 rounded-full object-cover flex-shrink-0 ring-2 ring-blue-100" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-                  {initials || 'U'}
+              <button
+                onClick={() => setEditProfileOpen(true)}
+                className="relative flex-shrink-0 group"
+                title="Изменить фото профиля"
+              >
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt="avatar" className="w-16 h-16 rounded-full object-cover ring-2 ring-blue-100" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xl font-bold">
+                    {initials || 'U'}
+                  </div>
+                )}
+                <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </div>
-              )}
+              </button>
               <div>
                 <h2 className="text-lg font-bold text-gray-800">
                   {profile.first_name} {profile.last_name}
@@ -719,14 +814,24 @@ function OwnerView({
             <h3 className="font-semibold text-gray-800 mb-3">Мои автомобили</h3>
             <div className="space-y-2">
               {profile.vehicles.map((v) => (
-                <div key={v.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <div>
+                <div key={v.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                  {v.photo_url ? (
+                    <img src={v.photo_url} alt="vehicle" className="w-14 h-10 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-14 h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h10l2-2zM14 8l2 4h3l-2-4h-3z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{v.car_model || 'Без модели'}</p>
                     <p className="text-xs text-gray-400">{v.plate_number || 'Без номера'}</p>
                   </div>
                   <button
                     onClick={() => setEditVehicleId(v.id)}
-                    className="p-1.5 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+                    className="p-1.5 bg-white border border-gray-200 rounded-lg hover:border-blue-300 transition-colors flex-shrink-0"
                   >
                     <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -744,19 +849,19 @@ function OwnerView({
             <h3 className="font-semibold text-gray-800 mb-3">Контакты</h3>
             <div className="space-y-2">
               {profile.whatsapp && (
-                <ContactRow icon="whatsapp" label="WhatsApp" value={formatPhoneDisplay(profile.whatsapp)} />
+                <ContactRow icon="whatsapp" label="WhatsApp" value={formatPhoneDisplay(profile.whatsapp)} href={`https://wa.me/${profile.whatsapp.replace(/\D/g, '')}`} />
               )}
               {profile.instagram && (
-                <ContactRow icon="instagram" label="Instagram" value={`@${profile.instagram.replace(/^@/, '')}`} />
+                <ContactRow icon="instagram" label="Instagram" value={`@${profile.instagram.replace(/^@/, '')}`} href={`https://instagram.com/${profile.instagram.replace(/^@/, '')}`} />
               )}
               {profile.telegram && (
-                <ContactRow icon="telegram" label="Telegram" value={profile.telegram} />
+                <ContactRow icon="telegram" label="Telegram" value={profile.telegram} href={`https://t.me/${profile.telegram.replace(/^@/, '')}`} />
               )}
               {profile.vk && (
-                <ContactRow icon="vk" label="VK" value={profile.vk} />
+                <ContactRow icon="vk" label="VK" value={profile.vk} href={`https://vk.com/${profile.vk}`} />
               )}
               {profile.facebook && (
-                <ContactRow icon="facebook" label="Facebook" value={profile.facebook} />
+                <ContactRow icon="facebook" label="Facebook" value={profile.facebook} href={`https://facebook.com/${profile.facebook}`} />
               )}
             </div>
           </Card>
@@ -803,6 +908,8 @@ function EditProfileModal({
 }) {
   const [firstName, setFirstName] = useState(profile.first_name)
   const [lastName, setLastName] = useState(profile.last_name)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatar_url || null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [whatsapp, setWhatsapp] = useState(profile.whatsapp || '')
   const [instagram, setInstagram] = useState(profile.instagram || '')
   const [telegram, setTelegram] = useState(profile.telegram || '')
@@ -810,13 +917,27 @@ function EditProfileModal({
   const [facebook, setFacebook] = useState(profile.facebook || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const initials = `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`
 
   async function handleSave() {
     setLoading(true)
     setError('')
+
+    let finalAvatarUrl: string | null = profile.avatar_url || null
+    if (avatarFile) {
+      const uploadRes = await uploadMedia(avatarFile)
+      if (!uploadRes.success) {
+        setError('Ошибка загрузки фото')
+        setLoading(false)
+        return
+      }
+      finalAvatarUrl = uploadRes.data?.url ?? null
+    }
+
     const res = await updateMyProfile({
       first_name: firstName.trim(),
       last_name: lastName.trim(),
+      avatar_url: finalAvatarUrl,
       whatsapp: whatsapp.trim() || null,
       instagram: instagram.trim() || null,
       telegram: telegram.trim() || null,
@@ -834,7 +955,39 @@ function EditProfileModal({
   return (
     <ModalOverlay onClose={onClose}>
       <h2 className="text-lg font-bold mb-4">Редактировать профиль</h2>
-      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+      <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+        {/* Avatar upload */}
+        <div className="flex flex-col items-center gap-2 pb-1">
+          <label className="relative cursor-pointer group">
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="avatar" className="w-20 h-20 rounded-full object-cover ring-2 ring-blue-100" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
+                {initials || 'U'}
+              </div>
+            )}
+            <div className="absolute inset-0 rounded-full bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null
+                if (file) {
+                  setAvatarFile(file)
+                  setAvatarPreview(URL.createObjectURL(file))
+                }
+                e.target.value = ''
+              }}
+            />
+          </label>
+          <span className="text-xs text-gray-400">Нажмите для смены фото</span>
+        </div>
         <Input label="Имя" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
         <Input label="Фамилия" value={lastName} onChange={(e) => setLastName(e.target.value)} />
         <Input label="WhatsApp" placeholder="+996 XXX XXX XXX" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
@@ -866,15 +1019,30 @@ function EditVehicleModal({
   const [plateNumber, setPlateNumber] = useState(vehicle.plate_number)
   const [carModel, setCarModel] = useState(vehicle.car_model)
   const [telegramEnabled, setTelegramEnabled] = useState(vehicle.telegram_enabled)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(vehicle.photo_url || null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSave() {
     setLoading(true)
     setError('')
+
+    let photoUrl: string | undefined = vehicle.photo_url || undefined
+    if (photoFile) {
+      const uploadRes = await uploadMedia(photoFile)
+      if (!uploadRes.success) {
+        setError('Ошибка загрузки фото')
+        setLoading(false)
+        return
+      }
+      photoUrl = uploadRes.data?.url
+    }
+
     const res = await updateVehicle(vehicle.id, {
       plate_number: plateNumber.trim(),
       car_model: carModel.trim(),
+      photo_url: photoUrl,
       telegram_enabled: telegramEnabled,
     })
     setLoading(false)
@@ -889,6 +1057,42 @@ function EditVehicleModal({
     <ModalOverlay onClose={onClose}>
       <h2 className="text-lg font-bold mb-4">Редактировать автомобиль</h2>
       <div className="space-y-3">
+        {/* Vehicle photo */}
+        <label className="block cursor-pointer group">
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Фото автомобиля</p>
+          <div className="relative w-full h-28 bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center">
+            {photoPreview ? (
+              <img src={photoPreview} alt="vehicle" className="w-full h-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center gap-1 text-gray-400">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h10l2-2zM14 8l2 4h3l-2-4h-3z" />
+                </svg>
+                <span className="text-xs">Добавить фото</span>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null
+                if (file) {
+                  setPhotoFile(file)
+                  setPhotoPreview(URL.createObjectURL(file))
+                }
+                e.target.value = ''
+              }}
+            />
+          </div>
+        </label>
         <Input label="Гос. номер" value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)} />
         <Input label="Марка / модель" value={carModel} onChange={(e) => setCarModel(e.target.value)} />
         <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer">

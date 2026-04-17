@@ -42,9 +42,14 @@ export function verifyOtp(
 
 export function sendMessage(
   qrId: string,
-  message: string
+  message: string,
+  mediaUrl?: string | null
 ): Promise<ApiResponse<SendMessageResponse>> {
-  return apiClient.post(`/qr-message/${qrId}`, { message })
+  return apiClient.post(`/qr-message/${qrId}`, { message, media_url: mediaUrl ?? undefined })
+}
+
+export function uploadMedia(file: File): Promise<ApiResponse<{ url: string }>> {
+  return apiClient.uploadFile('/upload', file)
 }
 
 // ─── Profile endpoints ────────────────────────────────────────────────────────

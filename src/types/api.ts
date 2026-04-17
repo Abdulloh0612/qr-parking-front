@@ -35,6 +35,7 @@ export interface QROwner {
   vk: string | null
   facebook: string | null
   telegram_enabled: boolean
+  telegram_bot_linked: boolean
   scan_count: number
 }
 
