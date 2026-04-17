@@ -104,12 +104,30 @@ export interface AdminClient {
   avatar_url: string | null
   created_at: string
   updated_at: string
+  vehicle_count?: number
+}
+
+export interface AdminVehicle {
+  id: number
+  display_id: string
+  user_id: string
+  plate_number: string
+  car_model: string
+  is_public: boolean
+  photo_url: string | null
+  reviews_enabled: boolean
+  telegram_enabled: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface AdminQRCode {
   id: number
   code: string
-  status: string
+  vehicle_id: string | null
+  status: 'unregistered' | 'active' | 'blocked'
+  created_by: string | null
+  registered_at: string | null
   created_at: string
 }
 
@@ -118,9 +136,33 @@ export interface AdminMessage {
   qr_code_id: string
   vehicle_id: string
   content: string
+  media_url: string | null
   sender_name: string | null
   sender_phone: string | null
   is_delivered: boolean
   delivered_at: string | null
   created_at: string
+}
+
+export interface AdminUserDetail extends AdminClient {
+  vehicles: AdminVehicle[]
+  messages: AdminMessage[]
+  qr_codes: AdminQRCode[]
+  vehicle_count: number
+}
+
+export interface DashboardGrowthPoint {
+  date: string
+  count: number
+}
+
+export interface DashboardStats {
+  total_users: number
+  total_qr_codes: number
+  active_qr: number
+  unregistered_qr: number
+  blocked_qr: number
+  total_messages: number
+  scans_today: number
+  user_growth: DashboardGrowthPoint[]
 }

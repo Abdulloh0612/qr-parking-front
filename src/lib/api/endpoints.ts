@@ -84,11 +84,43 @@ export function adminLogin(
   return apiClient.post('/admin/login', { username, password })
 }
 
+export function adminGetDashboard(
+  days = 30
+): Promise<ApiResponse<import('@/types/api').DashboardStats>> {
+  return apiClient.get(`/admin/dashboard?days=${days}`, true)
+}
+
 export function adminGetUsers(
   page = 1,
-  limit = 20
-): Promise<ApiResponse<{ users: import('@/types/api').AdminClient[]; total: number }>> {
+  limit = 50
+): Promise<ApiResponse<{ data: import('@/types/api').AdminClient[]; total: number; page: number; limit: number }>> {
   return apiClient.get(`/admin/users?page=${page}&limit=${limit}`, true)
+}
+
+export function adminGetUserDetail(
+  userId: string
+): Promise<ApiResponse<import('@/types/api').AdminUserDetail>> {
+  return apiClient.get(`/admin/users/${userId}/detail`, true)
+}
+
+export function adminUpdateUser(
+  userId: string,
+  data: { first_name?: string; last_name?: string; phone?: string }
+): Promise<ApiResponse<import('@/types/api').AdminClient>> {
+  return apiClient.patch(`/admin/users/${userId}`, data, true)
+}
+
+export function adminBlockUser(userId: string): Promise<ApiResponse<unknown>> {
+  return apiClient.patch(`/admin/users/${userId}/block`, undefined, true)
+}
+
+export function adminGetQRCodes(
+  status = '',
+  page = 1,
+  limit = 50
+): Promise<ApiResponse<{ data: import('@/types/api').AdminQRCode[]; total: number; page: number; limit: number }>> {
+  const q = status ? `&status=${status}` : ''
+  return apiClient.get(`/admin/qrcodes?page=${page}&limit=${limit}${q}`, true)
 }
 
 export function adminGenerateQR(
@@ -101,10 +133,9 @@ export function adminBlockQR(qrId: string): Promise<ApiResponse<unknown>> {
   return apiClient.patch(`/admin/qrcodes/${qrId}/block`, undefined, true)
 }
 
-export function adminGetMessages(): Promise<ApiResponse<import('@/types/api').AdminMessage[]>> {
-  return apiClient.get('/admin/messages', true)
-}
-
-export function adminBlockUser(userId: string): Promise<ApiResponse<unknown>> {
-  return apiClient.patch(`/admin/users/${userId}/block`, undefined, true)
+export function adminGetMessages(
+  page = 1,
+  limit = 50
+): Promise<ApiResponse<{ data: import('@/types/api').AdminMessage[]; total: number; page: number; limit: number }>> {
+  return apiClient.get(`/admin/messages?page=${page}&limit=${limit}`, true)
 }
