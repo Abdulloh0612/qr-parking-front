@@ -2,68 +2,396 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ════════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   Single source of truth. Everything maps to these variables.
+   ════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Surfaces */
+  --bg:           #ffffff;
+  --surface:      #ffffff;
+  --surface-2:    #fafafa;
+  --surface-3:    #f5f5f5;
+
+  /* Borders — no shadows, only borders */
+  --border:       #eaeaea;
+  --border-2:     #d1d1d1;
+  --border-focus: #000000;
+
+  /* Typography */
+  --text:         #0a0a0a;
+  --text-2:       #444444;
+  --text-3:       #888888;
+  --text-4:       #bbbbbb;
+
+  /* Accent — Vercel blue, used sparingly */
+  --accent:       #0070f3;
+  --accent-hover: #005fd4;
+  --accent-fg:    #ffffff;
+
+  /* Semantic */
+  --error:        #e00;
+  --error-bg:     #fff5f5;
+  --error-border: #ffd0d0;
+  --success:      #0ba34b;
+  --success-bg:   #f0fdf4;
+  --success-border: #bbf7d0;
+  --warning:      #d97706;
+  --warning-bg:   #fffbeb;
+  --warning-border: #fde68a;
+
+  /* Hero — inverted */
+  --hero-bg:      #000000;
+  --hero-text:    #ffffff;
+  --hero-text-2:  rgba(255,255,255,0.5);
+  --hero-border:  rgba(255,255,255,0.12);
+
+  /* Spacing scale (8px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radii — restrained */
+  --r-sm:  4px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-2xl: 20px;
+
+  /* Admin layout */
+  --sidebar-bg:          #0a0a0a;
+  --sidebar-border:      #1f1f1f;
+  --sidebar-text:        rgba(255,255,255,0.5);
+  --sidebar-text-hover:  rgba(255,255,255,0.8);
+  --sidebar-text-active: #ffffff;
+  --sidebar-active-bg:   rgba(255,255,255,0.08);
+  --sidebar-hover-bg:    rgba(255,255,255,0.04);
+  --sidebar-width:       240px;
+  --topbar-height:       64px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BASE
+   ════════════════════════════════════════════════════════════════════════════ */
 @layer base {
-  body {
-    @apply bg-gradient-to-br from-gray-50 to-gray-100 text-gray-900 antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-    min-height: 100vh;
-  }
+  *, *::before, *::after { box-sizing: border-box; }
 
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    font-size: 16px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Syne', sans-serif;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   COMPONENTS
+   ════════════════════════════════════════════════════════════════════════════ */
 @layer components {
-  .glass {
-    @apply bg-white/40 backdrop-blur-lg border border-white/20 shadow-lg;
+
+  /* ── Card ─────────────────────────────────────────────────────────────────
+     Before: bg-white rounded-2xl soft box-shadow
+     Reasoning: Generic shadow creates depth illusion. Sharp borders signal
+                precision. Linear/Vercel use 1px #eaeaea — nothing else.
+     After: white surface, 1px border, small radius, no shadow
+  ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+  }
+  .card:where([data-hover]) {
+    transition: border-color 150ms ease;
+  }
+  .card:where([data-hover]):hover {
+    border-color: var(--border-2);
   }
 
-  .glass-dark {
-    @apply bg-gray-900/40 backdrop-blur-lg border border-white/10 shadow-lg;
-  }
-
-  .input-base {
-    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm
-           focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent
-           transition-all duration-200 placeholder:text-gray-400;
-  }
-
+  /* ── Buttons ──────────────────────────────────────────────────────────────
+     Before: indigo→violet gradient + colored box-shadow
+     Reasoning: Gradients age poorly and scream "2021 SaaS kit".
+                Flat black is timeless, readable at any size, works everywhere.
+     After: solid #000 primary, clean white secondary, 150ms ease transitions
+  ── */
   .btn-base {
-    @apply px-6 py-3 rounded-xl font-medium transition-all duration-200
-           focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border-radius: var(--r-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+    outline: none;
+    white-space: nowrap;
+  }
+  .btn-base:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .btn-base:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .btn-base:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .btn-primary {
-    @apply btn-base bg-gradient-to-r from-primary-500 to-primary-600 text-white
-           hover:from-primary-600 hover:to-primary-700 focus:ring-primary-500
-           shadow-lg shadow-primary-500/30 active:scale-[0.98];
+    background: var(--text);
+    color: #ffffff;
+    border-color: var(--text);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
   }
 
   .btn-secondary {
-    @apply btn-base glass hover:bg-white/60 focus:ring-primary-400 active:scale-[0.98];
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border-2);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: var(--border-focus);
   }
 
-  .card {
-    @apply glass rounded-2xl p-6;
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-2);
+    border-color: transparent;
   }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .btn-danger {
+    background: var(--error);
+    color: #ffffff;
+    border-color: var(--error);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: #cc0000;
+    border-color: #cc0000;
+  }
+
+  .btn-sm  { padding: 6px 12px;  font-size: 13px; }
+  .btn-md  { padding: 8px 16px;  font-size: 14px; }
+  .btn-lg  { padding: 12px 20px; font-size: 15px; }
+
+  /* ── Inputs ───────────────────────────────────────────────────────────────
+     Before: #f5f6ff bg, indigo focus ring with spread blur
+     Reasoning: Colored focus rings blend into background. Black border on
+                focus (Vercel pattern) is instantly clear and authoritative.
+     After: off-white surface, 1px border, black border on focus, no glow
+  ── */
+  .input-base {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    border-radius: var(--r-md);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    transition: border-color 150ms ease, background 150ms ease;
+    outline: none;
+  }
+  .input-base::placeholder { color: var(--text-3); }
+  .input-base:hover { border-color: var(--border-focus); }
+  .input-base:focus {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .input-error                { border-color: var(--error) !important; }
+  .input-error:focus          { border-color: var(--error) !important; }
+
+  /* Dark context override — inputs inside hero-gradient */
+  .hero-gradient .input-base {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.2);
+    color: #ffffff;
+  }
+  .hero-gradient .input-base::placeholder { color: rgba(255,255,255,0.5); }
+  .hero-gradient .input-base:hover { border-color: rgba(255,255,255,0.35); }
+  .hero-gradient .input-base:focus {
+    border-color: var(--accent);
+    background: rgba(255,255,255,0.1);
+  }
+  .hero-gradient label {
+    color: rgba(255,255,255,0.6) !important;
+  }
+
+  /* Dark button overrides inside hero-gradient */
+  .hero-gradient .btn-primary {
+    background: #ffffff;
+    color: #0a0a0a;
+    border-color: #ffffff;
+  }
+  .hero-gradient .btn-primary:hover:not(:disabled) {
+    background: rgba(255,255,255,0.9);
+    border-color: rgba(255,255,255,0.9);
+  }
+  .hero-gradient .btn-secondary {
+    background: rgba(255,255,255,0.06);
+    color: #ffffff;
+    border-color: rgba(255,255,255,0.15);
+  }
+  .hero-gradient .btn-secondary:hover:not(:disabled) {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  /* ── Badges ───────────────────────────────────────────────────────────────
+     Before: rounded-full colored pills
+     Reasoning: Small radius tags feel more Linear/GitHub-like.
+  ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+    border: 1px solid;
+  }
+  .badge-success {
+    background: var(--success-bg);
+    color: var(--success);
+    border-color: var(--success-border);
+  }
+  .badge-warning {
+    background: var(--warning-bg);
+    color: var(--warning);
+    border-color: var(--warning-border);
+  }
+  .badge-error {
+    background: var(--error-bg);
+    color: var(--error);
+    border-color: var(--error-border);
+  }
+  .badge-info {
+    background: #eff6ff;
+    color: var(--accent);
+    border-color: #bfdbfe;
+  }
+  .badge-gray {
+    background: var(--surface-2);
+    color: var(--text-3);
+    border-color: var(--border);
+  }
+
+  /* ── Section label ────────────────────────────────────────────────────────
+     Before: text-xs uppercase tracking-widest text-slate-400
+     Reasoning: DM Sans + tight tracking + strong contrast looks editorial.
+  ── */
+  .section-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  /* ── Hero gradient ────────────────────────────────────────────────────────
+     Before: indigo→violet CSS gradient + radial blob decorations
+     Reasoning: Gradients are impossible to differentiate from 10,000 other
+                SaaS products. A flat #000 with a dot-grid pattern signals
+                intentionality, restraint, and premium quality.
+     After: flat black + 1px dot grid (CSS only, no images)
+  ── */
+  .hero-gradient {
+    position: relative;
+    background-color: #000000;
+    overflow: hidden;
+  }
+  .hero-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+  }
+  /* Subtle vignette so text stays readable */
+  .hero-gradient::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 100% 80% at 50% 100%, rgba(0,0,0,0.6) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* ── Contact row ──────────────────────────────────────────────────────────
+     Before: border-bottom with slate-50 hover
+     After: same but maps to CSS variables
+  ── */
+  .contact-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--border);
+    transition: opacity 150ms ease;
+  }
+  .contact-row:last-child { border-bottom: none; }
+  .contact-row:active     { opacity: 0.6; }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   UTILITIES
+   ════════════════════════════════════════════════════════════════════════════ */
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance  { text-wrap: balance; }
+  .pb-safe       { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .min-h-dvh     { min-height: 100dvh; }
+  .bg-app        { background: var(--bg); }
+  .font-display  { font-family: 'Syne', sans-serif; }
 }
 
-/* Скрытие стрелок у input type=number */
+/* ── Remove number input arrows ─────────────────────────────────────────── */
 input[type='number']::-webkit-inner-spin-button,
-input[type='number']::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-input[type='number'] {
-  -moz-appearance: textfield;
-}
+input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; }

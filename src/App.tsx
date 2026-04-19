@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { HomePage } from './pages/HomePage'
-import { AccountPage } from './pages/account/AccountPage'
-import { AdminPage } from './pages/admin/AdminPage'
-import { AdminLoginPage } from './pages/admin/AdminLoginPage'
-import { RegisterPage } from './pages/register/RegisterPage'
-import { ContactPage } from './pages/contact/ContactPage'
-import { QRRedirectPage } from './pages/QRRedirectPage'
+import { HomePage }       from './pages/home/ui/HomePage'
+import { AccountPage }    from './pages/account/ui/AccountPage'
+import { AdminPage }      from './pages/admin/dashboard/ui/AdminPage'
+import { AdminLoginPage } from './pages/admin/login/ui/AdminLoginPage'
+import { RegisterPage }   from './pages/register/ui/RegisterPage'
+import { ContactPage }    from './pages/contact/ui/ContactPage'
+import { QRRedirectPage } from './pages/qr-redirect/ui/QRRedirectPage'
+import { AdminRoute }     from './shared/lib/AdminRoute'
 
 function App() {
   return (
@@ -17,7 +18,7 @@ function App() {
         <Route path="/contact/:id" element={<ContactPage />} />
         <Route path="/qr/:id" element={<QRRedirectPage />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
       </Routes>
     </BrowserRouter>
   )
