@@ -9,3 +9,6 @@
 /.cursor
 /.claude
 firebase.json
+node_modules
+dist
+__MACOSX
