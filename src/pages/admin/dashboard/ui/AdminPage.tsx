@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
+import {
+  ResponsiveContainer, BarChart as RCBarChart, Bar, XAxis, YAxis,
+  Tooltip, CartesianGrid, Cell,
+} from 'recharts'
 import { Button } from '@/shared/ui/Button'
 import { Modal } from '@/shared/ui/Modal'
 import { Badge } from '@/shared/ui/Badge'
@@ -69,12 +73,38 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 
 // ─── Bar chart ────────────────────────────────────────────────────────────────
 
+const MONTH_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+
+function formatTickDate(iso: string) {
+  const [, m, d] = iso.split('-')
+  const mi = Number(m) - 1
+  if (Number.isNaN(mi) || !MONTH_RU[mi]) return iso
+  return `${Number(d)} ${MONTH_RU[mi]}`
+}
+
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { date: string; count: number } }> }) {
+  if (!active || !payload || !payload.length) return null
+  const p = payload[0].payload
+  return (
+    <div style={{
+      background: 'var(--text)', color: '#ffffff',
+      padding: '6px 10px', borderRadius: 'var(--r-sm)',
+      fontSize: 12, fontWeight: 500, lineHeight: 1.4,
+    }}>
+      <div style={{ opacity: 0.75, fontSize: 11 }}>{formatTickDate(p.date)}</div>
+      <div style={{ fontWeight: 700 }}>{p.count}</div>
+    </div>
+  )
+}
+
 function BarChart({ data, loading }: { data: { date: string; count: number }[]; loading?: boolean }) {
-  const safe = (data || []).map((d) => ({ date: String(d?.date ?? ''), count: Number(d?.count ?? 0) || 0 })).filter((d) => d.date.length > 0)
+  const safe = (data || [])
+    .map((d) => ({ date: String(d?.date ?? ''), count: Number(d?.count ?? 0) || 0 }))
+    .filter((d) => d.date.length > 0)
 
   if (loading) {
     return (
-      <div style={{ height: 128, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="animate-spin" style={{ width: 20, height: 20, border: '2px solid var(--border)', borderTopColor: 'var(--text)', borderRadius: '50%' }} />
       </div>
     )
@@ -82,39 +112,43 @@ function BarChart({ data, loading }: { data: { date: string; count: number }[]; 
 
   if (!safe.length) {
     return (
-      <div style={{ height: 128, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: 13 }}>
+      <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', fontSize: 13 }}>
         Нет данных за этот период
       </div>
     )
   }
 
-  const max = Math.max(...safe.map((d) => d.count), 1)
+  const step = safe.length > 20 ? Math.ceil(safe.length / 8) : safe.length > 10 ? 2 : 1
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 128, width: '100%', overflow: 'hidden' }}>
-      {safe.map((d) => {
-        const pct = Math.max((d.count / max) * 100, 4)
-        return (
-          <div key={d.date} className="group" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
-            <div style={{
-              width: '100%', height: `${pct}%`, minHeight: 2,
-              background: 'var(--accent)', borderRadius: '2px 2px 0 0',
-              transition: 'background 150ms ease',
-            }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--accent-hover)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--accent)'}
-            />
-            <div style={{
-              position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-              marginBottom: 6, padding: '4px 8px', borderRadius: 'var(--r-sm)',
-              background: 'var(--text)', color: '#ffffff', fontSize: 11, fontWeight: 500,
-              whiteSpace: 'nowrap', pointerEvents: 'none', opacity: 0,
-              transition: 'opacity 150ms ease',
-            }} className="group-hover:!opacity-100">
-              {d.count} · {d.date.slice(5)}
-            </div>
-          </div>
-        )
-      })}
+    <div style={{ width: '100%', height: 220 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <RCBarChart data={safe} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tickFormatter={formatTickDate}
+            interval={step - 1}
+            tick={{ fontSize: 11, fill: 'var(--text-3)' }}
+            tickLine={false}
+            axisLine={{ stroke: 'var(--border)' }}
+            minTickGap={8}
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={{ fontSize: 11, fill: 'var(--text-3)' }}
+            tickLine={false}
+            axisLine={false}
+            width={32}
+          />
+          <Tooltip cursor={{ fill: 'var(--surface-2)' }} content={<ChartTooltip />} />
+          <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
+            {safe.map((d) => (
+              <Cell key={d.date} fill="var(--accent)" />
+            ))}
+          </Bar>
+        </RCBarChart>
+      </ResponsiveContainer>
     </div>
   )
 }
@@ -991,12 +1025,6 @@ export function AdminPage() {
                   ))}
                 </div>
                 <BarChart data={chartPoints} loading={chartLoading} />
-                {chartPoints.length > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-4)' }}>
-                    <span>{chartPoints[0]?.date?.slice(5)}</span>
-                    <span>{chartPoints[chartPoints.length - 1]?.date?.slice(5)}</span>
-                  </div>
-                )}
               </div>
             </div>
           )}
